@@ -2,22 +2,107 @@
 # Documentation for winsplits api
 # http://obasen.orientering.se/winsplits/api/documentation
 
-winEventId=$1
-eventorId=$2
-eventName=$3
-extraStarts=$4
+eventName=$1
+winEventId=$2
+siSource=$3
 
-if [[ $extraStarts == "" ]]; then
-    siCheck=1
-else
-    siCheck=0
-    echo "Will add the following names to the start list and will insert random si numbers for any missing"
-    cat $extraStarts
+#FIXME what is or?
+if [[ $1 == "" ]]; then
+    echo "Usage: ./parseStarts eventName winsplitsEventID siCardSource [eventorId] [extraStartsFile]"
+    exit
+elif [[ $2 == "" ]]; then
+    echo "Usage: ./parseStarts eventName winsplitsEventID siCardSource [eventorId] [extraStartsFile]"
+    exit
+elif [[ $3 == "" ]]; then
+    echo "Usage: ./parseStarts eventName winsplitsEventID siCardSource [eventorId] [extraStartsFile]"
+    exit
 fi
 
 rm -r $eventName
 mkdir $eventName
 cd $eventName
+
+if [[ $siSource == "eventor" ]]; then
+    if [[ $4 == "" ]]; then
+        echo "Usage: ./parseStarts eventName winsplitsEventID eventor eventorId [extraStartsFile]"
+        exit
+    fi
+    eventorId=$4
+    extraStarts=$5
+    # Extract the names and SI card numbers from an eventor entry list
+
+    startFile=startList$eventName
+    resultFile=$eventName.xml
+
+    # Download the start list with si card numbers from eventor
+    echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass 
+    curl -o $startFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
+
+    wait
+    dos2unix $startFile
+
+    # http://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
+    grep name $startFile | awk 'BEGIN {FS="<"}; {print $2, ";", $11}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
+
+    #../convert.sh
+else
+    eventorId=-1
+    extraStarts=$4
+    echo "Expecting the input file $siSource to contain a list of runners and their SI numbers to be used."
+    #FIXME this should work as long as the seperator is not ";"
+    echo "Does this file contain an seperators other than tabs or spaces, e.g. \",\". \";\" will not work."
+    echo "y/n"
+    read resp < /dev/tty
+    if [[ $resp == "y" ]]; then
+        echo "Please type the seperator to be used:"
+        read sep < /dev/tty
+    else
+        sep=" ";
+    fi
+    echo "Please input the column number containing the numbers you would like to use as SI cards."
+    echo "If these are not si cards it is recommended a note is put on Attackpoint explaing how to claim the splits."
+    echo "This is only supported if the number is before the entries with spaces eg names with no seperator, or the last. For the last enter NF."
+
+    awk -F "$sep" '{for (i=1; i <= NF; i++ ) print i, $i; exit 0}' ../$siSource
+    read siCol < /dev/tty
+
+    awk -v col=$siCol '{print $col}' ../$siSource > siNums
+    paste -d ";" ../$siSource siNums > forename_surname_si.txt
+
+    rm siNums
+
+fi
+
+while read code letter; do
+    sed -i "s/$code/$letter/g" forename_surname_si.txt
+done < ../swed_codes 
+
+# Add any extra starts
+if [[ $extraStarts != "" ]]; then
+    cat ../$extraStarts >> forename_surname_si.txt
+fi
+
+# check for unknown HTML codes
+grep "&#" forename_surname_si.txt
+if [[ $? == 0 ]]; then
+    echo "found unknown HTML codes"
+    exit
+fi
+
+if [[ $extraStarts == "" ]]; then
+    echo "Would you like to give all unknown runners random si card numbers?"
+    echo "y/n"
+    read randomSi < /dev/tty
+    if [[ $randomSi == "y" ]]; then
+        siCheck=1
+    else
+        siCheck=0
+    fi
+else
+    siCheck=0
+    echo "Will add the following names to the start list and will insert random si numbers for any missing"
+    cat $extraStarts
+fi
 
 # Download from winsplits an event xml. eventId is specified by the user
 # e.g curl http://obasen.orientering.se/winsplits/api/events/{eventId}/resultlist/{format}
@@ -33,37 +118,8 @@ curl -o startList$eventName "https://eventor.orientering.se/Events/Entries?event
 
 wait
 dos2unix $eventName.xml
-dos2unix startList$eventName
 
 cp $eventName.xml ${eventName}Input.xml
-
-#cp ${eventName}Input.xml ${eventName}.xml
-
-
-# Extract the names and SI card numbers from an eventor entry list
-
-startFile=startList$eventName
-resultFile=$eventName.xml
-
-# http://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
-grep name $startFile | awk 'BEGIN {FS="<"}; {print $2, ";", $11}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
-
-#../convert.sh
-
-while read code letter; do
-    sed -i "s/$code/$letter/g" forename_surname_si.txt
-done < ../swed_codes 
-
-cat ../extraStarts >> forename_surname_si.txt
-
-# check for unknown HTML codes
-grep "&#" forename_surname_si.txt
-if [[ $? == 0 ]]; then
-    echo "found unknown HTML codes"
-    exit
-fi
-
-echo "did convert"
 
 # Create a list of the names present in the  xml result file
 grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNos
@@ -111,7 +167,6 @@ while read fullName; do
         echo "done $i of $fileLen"
     fi 
 done < resultNames
-
 
 cd ..
 
