@@ -21,6 +21,7 @@ fi
 rm -r $eventName
 mkdir $eventName
 cd $eventName
+resultFile=$eventName.xml
 
 if [[ $siSource == "eventor" ]]; then
     if [[ $4 == "" ]]; then
@@ -32,7 +33,6 @@ if [[ $siSource == "eventor" ]]; then
     # Extract the names and SI card numbers from an eventor entry list
 
     startFile=startList$eventName
-    resultFile=$eventName.xml
 
     # Download the start list with si card numbers from eventor
     echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass 
@@ -121,11 +121,16 @@ dos2unix $eventName.xml
 
 cp $eventName.xml ${eventName}Input.xml
 
+echo "Creating list of names in results..."
 # Create a list of the names present in the  xml result file
 grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNos
 grep Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' > GivNames
 grep Family $resultFile | sed 's:          <Family>::' | sed 's:</Family>::' > FamNames
 paste -d " " GivNames FamNames > resultNames
+
+# Find the line that the <Result> starts on
+firstRes=$(grep -n "<Result>" $resultFile | awk 'BEGIN {FS=":"} {print $1}' | head -n 1)
+firstRes=$(expr $firstRes + 1)
 
 fileLen=$(wc -l resultNames | awk '{print $1}')
 echo $fileLen
@@ -138,7 +143,13 @@ while read line; do
     lineList+=($line)
 done < LineNos
 
+echo "line ${lineList[0]}"
+echo "first $firstRes"
+resultDisp=$(expr $firstRes - ${lineList[0]})
+echo $resultDisp
+
 # Loop over winplits names and give them an si card number
+echo "Adding si card numbers..."
 i=0
 if [[ $siCheck == 1 ]]; then
     echo "Please enter si card for the not found names as they appear. Enter -1 if you would like to auto generate from now on:"
@@ -159,8 +170,8 @@ while read fullName; do
         fi
     fi
     siNoSpace="$(echo -e "${siNo}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    lineNo=${lineList[$i]}
-    lineInsert=$(expr $lineNo + $i + 8 )
+    lineNo=$(expr ${lineList[$i]} + $i)
+    lineInsert=$(expr $lineNo + $resultDisp)
     sed -i "${lineInsert}i        <ControlCard>$siNoSpace</ControlCard>" $resultFile
     i=$(expr $i + 1 )
     if (( i % tenPer == 0 )); then
