@@ -35,11 +35,30 @@ if [[ $siSource == "eventor" ]]; then
     startFile=startList$eventName
 
     # Download the start list with si card numbers from eventor
-    echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass 
+    # SOFT eventor
+    #echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass 
     curl -o $startFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
+    #IOF eventor
+#    curl -o $startFile "https://eventor.orientering.org/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
+#    curl -o $startFile  "https://eventor.orienteering.org/Events/StartList?eventId=5741&groupBy=EventClass" &
 
     wait
     dos2unix $startFile
+
+    # When eventor check that this actually contains the start list and is not just a lot of links to the classes
+#    grep Totalt $startFile
+#    if [[ $? == 0 ]]; then
+#        # if we found the string totalt we need to loop over the classes
+#        # find the first class
+#        grep eventClassID $startFile | strip out the first and last number > firstClID, lastClID 
+#        for clID in seq($firstClID, lastClID); do
+#            curl -o ${clID}StartFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&eventClassId=${clID}" &
+#            # parse 
+#        done
+#        wait
+#        cat *StartFile > startFile
+#
+#    fi
 
     # http://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
     grep name $startFile | awk 'BEGIN {FS="<"}; {print $2, ";", $11}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
@@ -94,9 +113,9 @@ if [[ $extraStarts == "" ]]; then
     echo "y/n"
     read randomSi < /dev/tty
     if [[ $randomSi == "y" ]]; then
-        siCheck=1
-    else
         siCheck=0
+    else
+        siCheck=1
     fi
 else
     siCheck=0
@@ -155,18 +174,29 @@ if [[ $siCheck == 1 ]]; then
     echo "Please enter si card for the not found names as they appear. Enter -1 if you would like to auto generate from now on:"
 fi
 while read fullName; do
-    nameNoSpace="$(echo -e "${fullName}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    grep "$fullName" forename_surname_si.txt > tmp
+#    nameNoSpace="$(echo -e "${fullName}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    grep "$fullName ;" forename_surname_si.txt > tmp
     if [[ $? == 0 ]]; then
-        siNo=$(grep "$fullName" forename_surname_si.txt | awk 'BEGIN {FS=";"} {print $2}' )
+        siNo=$(grep "$fullName ;" forename_surname_si.txt | awk 'BEGIN {FS=";"} {print $2}' )
     elif [[ $siCheck == 0 ]]; then
         siNo=$(expr $i + 100000000 )
-    else 
-        echo "$fullName"
+    else
         read siNo < /dev/tty
         if [[ $siNo == -1 ]]; then
             siCheck=0
             siNo=$(expr $i + 100000000 )
+        fi
+    fi
+    # Deal with blank si numbers in start list by giving random
+    if [[ $siNo == " " ]]; then
+        if [[ $siCheck == 0 ]]; then
+            siNo=$(expr $i + 100000000 )
+        else
+            read siNo < /dev/tty
+            if [[ $siNo == -1 ]]; then
+                siCheck=0
+                siNo=$(expr $i + 100000000 )
+            fi
         fi
     fi
     siNoSpace="$(echo -e "${siNo}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
