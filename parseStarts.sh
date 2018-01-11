@@ -38,6 +38,8 @@ if [[ $siSource == "eventor" ]]; then
     # SOFT eventor
     #echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass 
     curl -o $startFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
+    #TODO be able to accept startlist files which have a different ordering
+    #curl -o $startFile "https://eventor.orientering.se/Events/StartList?eventId=${eventorId}&groupBy=EventClass" &
     #IOF eventor
 #    curl -o $startFile "https://eventor.orientering.org/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
 #    curl -o $startFile  "https://eventor.orienteering.org/Events/StartList?eventId=5741&groupBy=EventClass" &
@@ -62,6 +64,8 @@ if [[ $siSource == "eventor" ]]; then
 
     # http://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
     grep name $startFile | awk 'BEGIN {FS="<"}; {print $2, ";", $11}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
+    #TODO be able to accept startlist files which have a different ordering
+    #grep name $startFile | awk 'BEGIN {FS="<"}; {print $7, ";", $}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
 
     #../convert.sh
 else
@@ -127,13 +131,13 @@ fi
 # e.g curl http://obasen.orientering.se/winsplits/api/events/{eventId}/resultlist/{format}
 curl -o $eventName.xml http://obasen.orientering.se/winsplits/api/events/${winEventId}/resultlist/xml &
 
-#Down;pad for just one class
+#Download for just one class
 #classId=2
 #curl -o $eventName.xml http://obasen.orientering.se/winsplits/api/events/${winEventId}/classes/${classId}/resultlist/xml &
 
 # Download the start list with si card numbers from eventor
-echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass 
-curl -o startList$eventName "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
+#echo https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass
+#curl -o startList$eventName "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&groupBy=EventClass" &
 
 wait
 dos2unix $eventName.xml
