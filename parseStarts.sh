@@ -2,6 +2,8 @@
 # Documentation for winsplits api
 # http://obasen.orientering.se/winsplits/api/documentation
 
+# TODO MilaByNight3 had gaffles. Parse and remove controls that weren't common. Almost need an xml parser?
+
 eventName=$1
 winEventId=$2
 siSource=$3
