@@ -50,19 +50,22 @@ if [[ $siSource == "eventor" ]]; then
     dos2unix $startFile
 
     # When eventor check that this actually contains the start list and is not just a lot of links to the classes
-#    grep Totalt $startFile
-#    if [[ $? == 0 ]]; then
-#        # if we found the string totalt we need to loop over the classes
-#        # find the first class
+    grep punchingCard $startFile
+    if [[ $? != 0 ]]; then
+        # if we found didn't find any punching cards we need to loop over the classes
+        # find the first class
 #        grep eventClassID $startFile | strip out the first and last number > firstClID, lastClID 
-#        for clID in seq($firstClID, lastClID); do
-#            curl -o ${clID}StartFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&eventClassId=${clID}" &
+        classList=$(grep eventClassId startList180414SLLong | sed 's/| /\n/g' | awk 'BEGIN {FS="="}; {print $4}' | awk 'BEGIN {FS=">"}; {print $1}' | sed 's/"//')
+        echo $classList
+        for clID in $classList; do
+            curl -o ${clID}StartFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&eventClassId=${clID}" &
 #            # parse 
-#        done
-#        wait
-#        cat *StartFile > startFile
-#
-#    fi
+        done
+        wait
+        cat *StartFile > startFile
+    fi
+    rm *StartFile
+    mv startFile $startFile
 
     # http://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
     grep name $startFile | awk 'BEGIN {FS="<"}; {print $2, ";", $11}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
@@ -211,12 +214,27 @@ fi
 while read fullName; do
 #    nameNoSpace="$(echo -e "${fullName}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     #FIXME What if matching names?
+    # should use eventor unique id
     grep "$fullName ;" forename_surname_si.txt > tmp
-    if [[ $? == 0 ]]; then
+    success=$?
+    found=$(grep "$fullName ;" forename_surname_si.txt | wc -l)
+    if [[ $found > 1 ]]; then
+        echo "found multiple entries for $fullName:"
+        cat tmp
+        echo "type the row number you would like to use this time, with 1 being the first or 0 to enter manually"
+        read rowNo < /dev/tty
+        if [[ $rowNo == 0 ]]; then
+            echo "enter the SI number"
+            read siNo < /dev/tty
+        else
+            siNo=$(head -n $rowNo tmp | tail -n 1 | awk 'BEGIN {FS=";"} {print $2}' )
+        fi
+    elif [[ $success == 0 ]]; then
         siNo=$(grep "$fullName ;" forename_surname_si.txt | awk 'BEGIN {FS=";"} {print $2}' )
     elif [[ $siCheck == 0 ]]; then
         siNo=$(expr $i + 100000000 )
     else
+        echo $fullName
         read siNo < /dev/tty
         if [[ $siNo == -1 ]]; then
             siCheck=0
