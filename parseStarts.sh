@@ -151,6 +151,40 @@ echo "Creating list of names in results..."
 grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNos
 grep Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' > GivNames
 grep Family $resultFile | sed 's:          <Family>::' | sed 's:</Family>::' > FamNames
+givLen=$(wc -l GivNames | awk '{print $1}')
+famLen=$(wc -l FamNames | awk '{print $1}')
+
+lineList=()
+while read line; do
+    lineList+=($line)
+done < LineNos
+
+if [[ $givLen != $famLen ]]; then
+    echo "Missing family ($famLen) or given names ($givLen)"
+
+    addedLines=0
+    fileEnd=$(expr $givLen - 1)
+    for i in $(seq 0 $fileEnd); do
+        lineNo=${lineList[$i]}
+        lineInsert=$(expr $lineNo - 1 + $addedLines)
+        cat $resultFile | head -n $lineInsert | tail -n 1 | grep "<Family>"
+        if [[ $? != 0 ]]; then
+            lineInsert=$(expr $lineNo + $addedLines)
+            sed -i "${lineInsert}i        <Family>Unknown</Family>" $resultFile
+            addedLines=$(expr $addedLines + 1)
+        fi
+    done
+
+    grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNoa
+    grep Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' > GivNames
+    grep Family $resultFile | sed 's:          <Family>::' | sed 's:</Family>::' > FamNames
+    givLen=$(wc -l GivNames | awk '{print $1}')
+    famLen=$(wc -l FamNames | awk '{print $1}')
+    if [[ $givLen != $famLen ]]; then
+        echo "Missing family ($famLen) or given names ($givLen)"
+        exit
+    fi
+fi
 paste -d " " GivNames FamNames > resultNames
 
 # Find the line that the <Result> starts on
@@ -162,11 +196,6 @@ echo $fileLen
 tenPer=$(expr $fileLen / 10 )
 echo $tenPer
 echo "modifying $fileLen Entries"
-
-lineList=()
-while read line; do
-    lineList+=($line)
-done < LineNos
 
 echo "line ${lineList[0]}"
 echo "first $firstRes"
@@ -181,6 +210,7 @@ if [[ $siCheck == 1 ]]; then
 fi
 while read fullName; do
 #    nameNoSpace="$(echo -e "${fullName}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    #FIXME What if matching names?
     grep "$fullName ;" forename_surname_si.txt > tmp
     if [[ $? == 0 ]]; then
         siNo=$(grep "$fullName ;" forename_surname_si.txt | awk 'BEGIN {FS=";"} {print $2}' )
@@ -215,6 +245,8 @@ while read fullName; do
     fi 
 done < resultNames
 
+#Remove tmp files
+rm -rf sed* tmp
 cd ..
 
 
