@@ -50,7 +50,7 @@ if [[ $siSource == "eventor" ]]; then
     dos2unix $startFile
 
     # When eventor check that this actually contains the start list and is not just a lot of links to the classes
-    grep punchingCard $startFile
+    grep punchingCard $startFile > tmp
     if [[ $? != 0 ]]; then
         # if we found didn't find any punching cards we need to loop over the classes
         # find the first class
@@ -63,9 +63,10 @@ if [[ $siSource == "eventor" ]]; then
         done
         wait
         cat *StartFile > startFile
+        rm *StartFile
+        mv startFile $startFile
     fi
-    rm *StartFile
-    mv startFile $startFile
+    rm tmp
 
     # http://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
     grep name $startFile | awk 'BEGIN {FS="<"}; {print $2, ";", $11}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
