@@ -8,6 +8,10 @@ eventName=$1
 winEventId=$2
 siSource=$3
 
+#can use winsplits to get the si card numbers by downloading the spl file, e.g.:
+#curl -o colonial.spl http://obasen.orientering.se/winsplits/wsp4/downloadEvent.php?databaseId=61334
+#this has the si card delimited by 
+
 #FIXME what is or?
 if [[ $1 == "" ]]; then
     echo "Usage: ./parseStarts eventName winsplitsEventID siCardSource [eventorId] [extraStartsFile]"
@@ -55,7 +59,7 @@ if [[ $siSource == "eventor" ]]; then
         # if we found didn't find any punching cards we need to loop over the classes
         # find the first class
 #        grep eventClassID $startFile | strip out the first and last number > firstClID, lastClID 
-        classList=$(grep eventClassId startList180414SLLong | sed 's/| /\n/g' | awk 'BEGIN {FS="="}; {print $4}' | awk 'BEGIN {FS=">"}; {print $1}' | sed 's/"//')
+        classList=$(grep eventClassId $startFile | sed 's/| /\n/g' | awk 'BEGIN {FS="="}; {print $4}' | awk 'BEGIN {FS=">"}; {print $1}' | sed 's/"//')
         echo $classList
         for clID in $classList; do
             curl -o ${clID}StartFile "https://eventor.orientering.se/Events/Entries?eventId=${eventorId}&eventClassId=${clID}" &
@@ -74,6 +78,10 @@ if [[ $siSource == "eventor" ]]; then
     #grep name $startFile | awk 'BEGIN {FS="<"}; {print $7, ";", $}' | sed 's/td class="name">//' | sed 's/td class="punchingCard">//' | sed ':a;N;$!ba;s/th class="name">Namn ; \n//g' > forename_surname_si.txt
 
     #../convert.sh
+elif [[ $siSource == "spl" ]]; then
+    curl -o $eventName.spl http://obasen.orientering.se/winsplits/wsp4/downloadEvent.php?databaseId=${winEventId}
+    python3 ../siFromSpl.py $eventName.spl forename_surname_si.txt
+
 else
     eventorId=-1
     extraStarts=$4
@@ -102,14 +110,14 @@ else
 
 fi
 
-while read code letter; do
-    sed -i "s/$code/$letter/g" forename_surname_si.txt
-done < ../swed_codes 
-
 # Add any extra starts
 if [[ $extraStarts != "" ]]; then
     cat ../$extraStarts >> forename_surname_si.txt
 fi
+
+while read code letter; do
+    sed -i "s/$code/$letter/g" forename_surname_si.txt
+done < ../swed_codes 
 
 # check for unknown HTML codes
 grep "&#" forename_surname_si.txt
@@ -150,6 +158,10 @@ dos2unix $eventName.xml
 
 cp $eventName.xml ${eventName}Input.xml
 
+#while read code letter; do
+    sed -i 's/amp;//g' $eventName.xml
+#done < ../swed_codes 
+
 echo "Creating list of names in results..."
 # Create a list of the names present in the  xml result file
 grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNos
@@ -174,12 +186,13 @@ if [[ $givLen != $famLen ]]; then
         cat $resultFile | head -n $lineInsert | tail -n 1 | grep "<Family>"
         if [[ $? != 0 ]]; then
             lineInsert=$(expr $lineNo + $addedLines)
-            sed -i "${lineInsert}i        <Family>Unknown</Family>" $resultFile
+            sed -i "${lineInsert}i\\
+          <Family></Family>" $resultFile
             addedLines=$(expr $addedLines + 1)
         fi
     done
 
-    grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNoa
+    grep -n Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' | awk 'BEGIN {FS=":"} {print $1}' > LineNos
     grep Given $resultFile | sed 's:          <Given>::' | sed 's:</Given>::' > GivNames
     grep Family $resultFile | sed 's:          <Family>::' | sed 's:</Family>::' > FamNames
     givLen=$(wc -l GivNames | awk '{print $1}')
@@ -216,9 +229,9 @@ while read fullName; do
 #    nameNoSpace="$(echo -e "${fullName}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     #FIXME What if matching names?
     # should use eventor unique id
-    grep "$fullName ;" forename_surname_si.txt > tmp
+    grep "$fullName" forename_surname_si.txt > tmp
     success=$?
-    found=$(grep "$fullName ;" forename_surname_si.txt | wc -l)
+    found=$(grep "$fullName" forename_surname_si.txt | wc -l)
     if [[ $found > 1 ]]; then
         echo "found multiple entries for $fullName:"
         cat tmp
@@ -231,7 +244,7 @@ while read fullName; do
             siNo=$(head -n $rowNo tmp | tail -n 1 | awk 'BEGIN {FS=";"} {print $2}' )
         fi
     elif [[ $success == 0 ]]; then
-        siNo=$(grep "$fullName ;" forename_surname_si.txt | awk 'BEGIN {FS=";"} {print $2}' )
+        siNo=$(grep "$fullName" forename_surname_si.txt | awk 'BEGIN {FS=";"} {print $2}' )
     elif [[ $siCheck == 0 ]]; then
         siNo=$(expr $i + 100000000 )
     else
