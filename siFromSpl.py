@@ -50,7 +50,6 @@ def si_from_spl( splFile, startFile ):
         if isRealCourse:
             courseName_binary = data[courseLoc+3:courseLoc + 3 + courseLen] 
             courseName = courseName_binary.decode('cp1252')
-            print( courseName )
             courseList.append( courseName )
             courseDict[courseName] = courseLoc
 
@@ -79,12 +78,14 @@ def si_from_spl( splFile, startFile ):
 
         if data[endLoc-5] == 132 or data[endLoc-5] == 129 or data[endLoc-5] == 128:
     #FIXME
-    #check on these data transforms being the riht length
+    #check on these data transforms being the right length
             si_no = int.from_bytes(data[endLoc-4:endLoc],byteorder='little')
             # Get the length of the first name
             firstStart = endLoc + 3
             firstLen = int.from_bytes(data[firstStart-2:firstStart], byteorder='little')
             # Check the surname follows the firstname to ensure we are where we expect
+            if firstStart + firstLen > len( data ):
+                continue
             if data[firstStart+firstLen] != 136:
                 continue 
             # Then get it. spl uses cp1252 windows encoding
@@ -98,6 +99,7 @@ def si_from_spl( splFile, startFile ):
             surName = surName_binary.decode('cp1252')
 
             name = firstName + " " + surName
+            print( courseName, name )
             courseEntry[name] = str(si_no)
             
             #TODO add club and course to improve uniqueness matching
@@ -116,4 +118,3 @@ if __name__=='__main__':
     splFile = sys.argv[1]
     startFile = sys.argv[2]
     startList = si_from_spl( splFile, startFile )
-    print( startList )
