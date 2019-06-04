@@ -7,6 +7,15 @@ import sys
 # }
 # 
 
+#Look for \x45 followed by \x4e 3 chars later when the course is not longer than 50 chars or off the end of the file
+def check_is_course( courseLoc, courseLen, data ):
+    isRealCourse = False
+    if courseLen < 50 and courseLoc + 3 + courseLen < len(data) and data[courseLoc + 3 + courseLen] == 69:
+        courseLenAlt = int.from_bytes( data[courseLoc+3+courseLen+1:courseLoc+3+courseLen+3], byteorder='little' )
+        if courseLoc + 6 + courseLen < len(data) and data[courseLoc + 6 + courseLen] == 78:
+            isRealCourse = True
+    return isRealCourse
+
 def si_from_spl( splFile, startFile ):
     endLoc = 0
     num = 0
@@ -29,19 +38,30 @@ def si_from_spl( splFile, startFile ):
     courseLoc = 0
     courseList = []
     courseDict = {}
+    coursePrintStr = "loc {}, len {}"
     while courseLoc != -1:
         courseLoc = data.find(b'\x43', courseLoc+1)
-    #    print( "loc", courseLoc )
         # \x43 is stupidly common so look for the end character which is \x45 and 3 characters later \x4e
+        # Alternatively the end char is \x44 in which case the class is repeated usually, so just change where we look
+        # We also 
         # FIXME
         # This is far from perfect but fails if the format is not exactly this which it sometime is
         courseLen = int.from_bytes( data[courseLoc+1:courseLoc+3], byteorder='little' )
+    #    print( coursePrintStr.format(courseLoc, courseLen) )
         isRealCourse = False
-        
-        if courseLoc + 3 + courseLen < len(data) and data[courseLoc + 3 + courseLen] == 69:
-            courseLenAlt = int.from_bytes( data[courseLoc+3+courseLen+1:courseLoc+3+courseLen+3], byteorder='little' )
-            if courseLoc + 6 + courseLen < len(data) and data[courseLoc + 6 + courseLen] == 78:
-                isRealCourse = True
+
+        # If the end char is \x44 then this is the long name. This is usually what the xml also has
+        # Need to check on \x45 though, which ends the short name
+        if courseLoc + 3 + courseLen < len(data) and data[courseLoc + 3 + courseLen] == 68:
+            courseCheckLoc = courseLoc + 3 + courseLen
+            courseCheckLen = int.from_bytes( data[courseCheckLoc+1:courseCheckLoc+3], byteorder='little' )
+            isRealCourse = check_is_course( courseCheckLoc, courseCheckLen, data )
+        else:
+            isRealCourse = check_is_course( courseLoc, courseLen, data )
+#        if courseLoc + 3 + courseLen < len(data) and data[courseLoc + 3 + courseLen] == 69:
+#            courseLenAlt = int.from_bytes( data[courseLoc+3+courseLen+1:courseLoc+3+courseLen+3], byteorder='little' )
+#            if courseLoc + 6 + courseLen < len(data) and data[courseLoc + 6 + courseLen] == 78:
+#                isRealCourse = True
 
 #            courseLenAlt = and data[courseLoc + 6 + courseLen] == 78 ):
 #            if courseLoc + courseLen + courseLenAlt + 9 < len(data) and data[courseLoc + courseLen + courseLenAlt + 9] == 78:
@@ -50,6 +70,7 @@ def si_from_spl( splFile, startFile ):
         if isRealCourse:
             courseName_binary = data[courseLoc+3:courseLoc + 3 + courseLen] 
             courseName = courseName_binary.decode('cp1252')
+        #    print( courseName )
             courseList.append( courseName )
             courseDict[courseName] = courseLoc
 
@@ -99,7 +120,6 @@ def si_from_spl( splFile, startFile ):
             surName = surName_binary.decode('cp1252')
 
             name = firstName + " " + surName
-            print( courseName, name )
             courseEntry[name] = str(si_no)
             
             #TODO add club and course to improve uniqueness matching
@@ -110,7 +130,6 @@ def si_from_spl( splFile, startFile ):
         
     startList[courseName] = courseEntry
     startFile.close()
-    print( startList )
     return startList
 
 
@@ -118,3 +137,4 @@ if __name__=='__main__':
     splFile = sys.argv[1]
     startFile = sys.argv[2]
     startList = si_from_spl( splFile, startFile )
+    print( startList )
