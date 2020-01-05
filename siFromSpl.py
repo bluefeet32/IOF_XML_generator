@@ -88,7 +88,12 @@ def si_from_spl( splFile, startFile ):
         #FIXME Need to ensure we are reading the right thing more rigorously
         # Since \x87 is a valid thing in the file check the 5th byte before the one we found
         # marks the start of an si card
-        endLoc = data.find(b'\x87', endLoc + 1)
+
+        # e.g. x80-id-x84||x81-ccardid-x87-firstname-x-lastname-x-club-x97
+        # Can also be x80-sicard-x86-firstname-x20-lastname-x8C-club-x97
+
+        #Added support for the common x86 at the start of the name block        
+        endLoc = min(data.find(b'\x86', endLoc + 1), data.find(b'\x87', endLoc + 1))
 
         # increment the course index when we move onto the next course
         if endLoc > courseDict[courseList[courseIdx + 1]]:
@@ -98,29 +103,69 @@ def si_from_spl( splFile, startFile ):
             courseName = courseList[courseIdx]
 
         if data[endLoc-5] == 132 or data[endLoc-5] == 129 or data[endLoc-5] == 128:
-    #FIXME
-    #check on these data transforms being the right length
+            #FIXME
+            #check on these data transforms being the right length
             si_no = int.from_bytes(data[endLoc-4:endLoc],byteorder='little')
+            #print(si_no)
+            
             # Get the length of the first name
             firstStart = endLoc + 3
             firstLen = int.from_bytes(data[firstStart-2:firstStart], byteorder='little')
+
             # Check the surname follows the firstname to ensure we are where we expect
             if firstStart + firstLen > len( data ):
                 continue
-            if data[firstStart+firstLen] != 136:
-                continue 
+
+            if not (data[firstStart+firstLen] == 136 or data[firstStart+firstLen] == 137
+                    or data[firstStart+firstLen] == 140):
+                continue
+            
             # Then get it. spl uses cp1252 windows encoding
             firstName_binary = data[firstStart:firstStart+firstLen]
-            firstName = firstName_binary.decode('cp1252')
+            try:
+                firstName = firstName_binary.decode('cp1252')
+            except UnicodeDecodeError:
+                # Getting weird error so escaped it here
+                firstName = ''
+
 
             # Same for surname
-            surStart = firstStart + firstLen + 3
-            surLen = int.from_bytes(data[surStart-2:surStart], byteorder='little')
-            surName_binary = data[surStart:surStart+surLen]
-            surName = surName_binary.decode('cp1252')
+            # If firstname ends with 136 it has been split into given name and surname
+            if data[firstStart+firstLen] == 136:
+                surStart = firstStart + firstLen + 3
+                surLen = int.from_bytes(data[surStart-2:surStart], byteorder='little')
+                surName_binary = data[surStart:surStart+surLen]
+                try:
+                    surName = surName_binary.decode('cp1252')
+                except:
+                    # Getting weird error so escaped it here
+                    surName = ''
+            else:
+                surName = ''
+
+                # If I had to use Given Name only, split based on space
+                # And give the last bit of the string to the surname
+                try:
+                    f = firstName
+                    s = surName
+                    nm = firstName.split(" ")
+                    if len(nm) > 1:
+                        firstName = ' '.join(n for n in nm[:-1])
+                        surName = nm[-1]
+                except:
+                    firstName = f
+                    surName = s
+
 
             name = firstName + " " + surName
-            courseEntry[name] = str(si_no)
+
+            # By picking up x86, we now get the occasional random id
+            # that is not si_card. Bodged fix assuming these ids aren't
+            # going to be over 1000. Not fully verified.
+            if si_no > 1000:
+                courseEntry[name] = str(si_no)
+            else:
+                courseEntry[name] = 'None'
             
             #TODO add club and course to improve uniqueness matching
 
